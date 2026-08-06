@@ -77,6 +77,8 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
     return state;
   }),
 
+  // cache bust
+
   clearQueue: () => set({ queue: [], currentIndex: -1, currentTrack: null }),
 
   toggleLoop: () => set((state) => ({ isLooping: !state.isLooping })),
