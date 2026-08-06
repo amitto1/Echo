@@ -470,7 +470,7 @@ app.put('/api/playlists/:playlistId', async (req, res) => {
   }
 });
 
-// GENERATIVE AI BEAT GENERATOR (Hugging Face with Dev Fallback)
+// GENERATIVE AI BEAT GENERATOR (Fixed Timeout & Error Handling)
 app.post('/api/ai/generate-beat', async (req, res) => {
   const { prompt } = req.body;
 
@@ -479,7 +479,7 @@ app.post('/api/ai/generate-beat', async (req, res) => {
   }
 
   try {
-    console.log(`🎵 Attempting Hugging Face AI for: "${prompt}"...`);
+    console.log(`🎵 Attempting Hugging Face AI for: "${prompt}"... (this takes 15-30s)`);
 
     // The Official Hugging Face Request
     const response = await axios.post(
@@ -491,7 +491,7 @@ app.post('/api/ai/generate-beat', async (req, res) => {
           'Content-Type': 'application/json'
         },
         responseType: 'arraybuffer',
-        timeout: 8000 // 8-second timeout so your frontend doesn't hang
+        timeout: 50000 // Bumped to 50 seconds so MusicGen actually finishes
       }
     );
 
@@ -502,17 +502,20 @@ app.post('/api/ai/generate-beat', async (req, res) => {
     res.json({ success: true, audioUrl, prompt });
 
   } catch (error) {
-    console.warn('\n⚠️ NETWORK BLOCK DETECTED: ISP is blocking Hugging Face locally.');
-    console.log('🎧 Engaging "Dev Fallback Mode" for UI testing...\n');
-    
-    // High-quality royalty-free fallback track
-    const devFallbackUrl = "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3"; 
+    console.error('❌ HF Generation Error:', error.message);
 
-    res.json({ 
-      success: true, 
-      audioUrl: devFallbackUrl, 
-      prompt: prompt,
-      isDevFallback: true
+    // If Hugging Face is loading the model (Cold Start)
+    if (error.response && error.response.status === 503) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'AI model is waking up from a cold start. Please wait 20 seconds and try again!' 
+      });
+    }
+
+    // Return the actual error instead of hiding it behind the exact same song
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to synthesize beat from Hugging Face. Check backend logs.' 
     });
   }
 });
