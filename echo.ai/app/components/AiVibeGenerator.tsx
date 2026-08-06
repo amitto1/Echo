@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Loader2, Play, Search, Wand2, Music2 } from "lucide-react";
+import { Sparkles, Loader2, Play, Search, Wand2 } from "lucide-react";
 import { usePlayerStore } from "../store/usePlayerStore";
 
 export default function AiVibeGenerator() {
@@ -11,7 +11,6 @@ export default function AiVibeGenerator() {
   const [statusText, setStatusText] = useState("");
   
   const playSong = usePlayerStore((state) => state.playSong);
-  const setQueue = usePlayerStore((state) => state.setQueue);
 
   // Suggestions for Vibe Search
   const vibeSuggestions = [
@@ -83,7 +82,7 @@ export default function AiVibeGenerator() {
             id: `ai-beat-${Date.now()}`,
             title: searchQuery.charAt(0).toUpperCase() + searchQuery.slice(1),
             artist: "Echo.AI Studio",
-            thumbnail: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80", // Sleek dark aesthetic fallback thumbnail
+            thumbnail: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80",
             audioUrl: data.audioUrl,
             isAiGenerated: true,
           };
