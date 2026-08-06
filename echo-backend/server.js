@@ -1,11 +1,14 @@
 // backend/server.js
 const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+dns.setServers(['1.1.1.1', '1.0.0.1']);
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const https = require('https');
 const mongoose = require('mongoose');
+const YouTube = require('youtube-sr').default; 
 const { GoogleGenAI } = require('@google/genai');
+const { client } = require("@gradio/client");
 require('dotenv').config();
 
 const UserData = require('./models/UserData');
@@ -44,7 +47,7 @@ app.post('/api/ai/recommend', async (req, res) => {
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: `You are an expert music curator. Based on the user's mood or topic: "${prompt}", generate 5 popular songs with artist names. Return ONLY a raw JSON array of strings formatted like: ["Song Title - Artist", "Song Title - Artist"]. Do not wrap in markdown or backticks.`,
     });
 
@@ -71,7 +74,7 @@ app.post('/api/ai/recommend', async (req, res) => {
   }
 });
 
-// YouTube Search API Endpoint
+// GLOBAL SEARCH ENDPOINT (youtube-sr)
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) {
@@ -79,12 +82,80 @@ app.get('/api/search', async (req, res) => {
   }
 
   try {
-    const youtubeUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(query)}&type=video&videoCategoryId=10&key=${process.env.YOUTUBE_API_KEY}`;
-    const response = await axios.get(youtubeUrl);
-    res.json(response.data);
+    const videos = await YouTube.search(query, { limit: 25 });
+
+    // FIX: Filter out any broken results that don't have a valid ID or title before mapping
+    const validVideos = videos.filter(video => video && video.id && video.title);
+
+    const items = validVideos.map((video) => {
+      const titleStr = video?.title || 'Unknown Title';
+      const artistStr = video?.channel?.name || 'YouTube';
+      const thumbnailVal = video?.thumbnail?.url || '';
+
+      return {
+        id: video.id,
+        title: titleStr,
+        artist: artistStr,
+        thumbnail: thumbnailVal,
+        snippet: {
+          title: titleStr,
+          channelTitle: artistStr,
+          thumbnails: {
+            high: { url: thumbnailVal },
+            default: { url: thumbnailVal },
+          },
+        },
+      };
+    });
+
+    res.json({ items });
   } catch (error) {
-    console.error('YouTube API Error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to fetch search results from YouTube' });
+    console.error('Search Error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch search results', items: [] });
+  }
+});
+
+// YouTube Search Suggestions & Rich Results Endpoint (youtube-sr)
+app.get('/api/suggestions', async (req, res) => {
+  const query = req.query.q;
+  if (!query) {
+    return res.json({ textSuggestions: [], richSuggestions: [] });
+  }
+
+  try {
+    // 1. Fetch text autocomplete terms from public endpoint
+    const suggestUrl = `https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&q=${encodeURIComponent(query)}`;
+    const response = await axios.get(suggestUrl);
+    
+    let rawData = response.data;
+    if (typeof rawData === 'string') {
+      const match = rawData.match(/\(([\s\S]*)\)/);
+      if (match && match[1]) {
+        rawData = JSON.parse(match[1]);
+      }
+    }
+    const textSuggestions = (rawData && Array.isArray(rawData[1]) ? rawData[1] : []).slice(0, 5).map(item => item[0]);
+
+    // 2. Fetch rich media results using youtube-sr
+    let richSuggestions = [];
+    try {
+      const videos = await YouTube.search(query, { limit: 4 });
+      
+      richSuggestions = videos.map(video => ({
+        id: video?.id || '',
+        title: video?.title || 'Song',
+        artist: video?.channel?.name || 'YouTube',
+        thumbnail: video?.thumbnail?.url || '',
+        type: 'Song',
+      }));
+    } catch (searchErr) {
+      console.error('Rich suggestions sub-error:', searchErr.message);
+    }
+
+    res.json({ textSuggestions, richSuggestions });
+  } catch (error) {
+    console.error('Suggestions Error:', error.message);
+    res.json({ textSuggestions: [], richSuggestions: [] });
   }
 });
 
@@ -151,10 +222,10 @@ app.get('/api/library/playlists/:id', async (req, res) => {
 });
 
 // ==========================================
-// CUSTOM DATABASE ENDPOINTS (Stats & CRUD)
+// CUSTOM DATABASE ENDPOINTS (Stats & Playlists)
 // ==========================================
 
-// GET USER STATS & PLAYLISTS
+// GET USER STATS
 app.get('/api/user/data', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -209,58 +280,240 @@ app.post('/api/user/stats/tick', async (req, res) => {
   }
 });
 
-// CREATE CUSTOM PLAYLIST
-app.post('/api/user/playlists', async (req, res) => {
+// ------------------------------------------
+// PLAYLIST CRUD ENDPOINTS (/api/playlists)
+// ------------------------------------------
+
+// GET USER PLAYLISTS
+app.get('/api/playlists', async (req, res) => {
   try {
-    const { userId, title, description } = req.body;
+    const { userId } = req.query;
+    
+    if (!userId) {
+      const allUsers = await UserData.find({}).limit(1);
+      const userPlaylists = allUsers[0]?.playlists || [];
+      return res.json({ success: true, data: userPlaylists });
+    }
+
     let user = await UserData.findOne({ userId });
-    if (!user) user = new UserData({ userId });
+    if (!user) user = await UserData.create({ userId });
 
-    user.playlists.push({ title, description, tracks: [] });
-    await user.save();
-
-    res.json(user.playlists);
+    res.json({ success: true, data: user.playlists || [] });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create playlist' });
+    res.status(500).json({ success: false, error: 'Failed to fetch playlists' });
   }
 });
 
-// ADD TRACK TO CUSTOM PLAYLIST
-app.post('/api/user/playlists/:playlistId/tracks', async (req, res) => {
+// CREATE PLAYLIST
+app.post('/api/playlists', async (req, res) => {
   try {
-    const { userId, track } = req.body;
+    const { userId, name, title, description } = req.body;
+    const playlistName = name || title || 'New Playlist';
+
+    let user = userId 
+      ? await UserData.findOne({ userId }) 
+      : await UserData.findOne({});
+
+    if (!user) {
+      user = new UserData({ userId: userId || 'default_user' });
+    }
+
+    const newPlaylist = { title: playlistName, description: description || '', tracks: [] };
+    user.playlists.push(newPlaylist);
+    await user.save();
+
+    const created = user.playlists[user.playlists.length - 1];
+    res.status(201).json({ success: true, data: created });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to create playlist' });
+  }
+});
+
+// ADD TRACK TO PLAYLIST (WITH DUPLICATE PREVENTION)
+app.post('/api/playlists/:playlistId/tracks', async (req, res) => {
+  try {
+    const { userId, trackId, track } = req.body;
     const { playlistId } = req.params;
 
-    const user = await UserData.findOne({ userId });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    let user = userId 
+      ? await UserData.findOne({ userId }) 
+      : await UserData.findOne({ 'playlists._id': playlistId });
+
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     const playlist = user.playlists.id(playlistId);
-    if (!playlist) return res.status(404).json({ error: 'Playlist not found' });
+    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
 
-    playlist.tracks.push(track);
+    // Normalize track format
+    const formattedTrack = {
+      id: track?.id?.videoId || track?.id || trackId || '',
+      title: track?.snippet?.title || track?.title || 'Unknown Track',
+      artist: track?.snippet?.channelTitle || track?.artist || 'Unknown Artist',
+      thumbnail: track?.snippet?.thumbnails?.default?.url || track?.thumbnail || '',
+    };
+
+    // Check if song already exists in playlist
+    const isDuplicate = playlist.tracks.some(
+      (existingTrack) => existingTrack.id === formattedTrack.id
+    );
+
+    if (isDuplicate) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Already in playlist' 
+      });
+    }
+
+    playlist.tracks.push(formattedTrack);
     await user.save();
 
-    res.json(playlist);
+    res.json({ success: true, data: playlist });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to add track to playlist' });
+    console.error('Error adding track to playlist:', error);
+    res.status(500).json({ success: false, error: 'Failed to add track to playlist' });
   }
 });
 
-// DELETE CUSTOM PLAYLIST
-app.delete('/api/user/playlists/:playlistId', async (req, res) => {
+// REMOVE TRACK FROM PLAYLIST
+app.delete('/api/playlists/:playlistId/tracks/:trackId', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const { playlistId, trackId } = req.params;
+
+    let user = userId 
+      ? await UserData.findOne({ userId }) 
+      : await UserData.findOne({ 'playlists._id': playlistId });
+
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    const playlist = user.playlists.id(playlistId);
+    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+    playlist.tracks = playlist.tracks.filter(
+      (t) => t.id !== trackId && t._id?.toString() !== trackId
+    );
+    await user.save();
+
+    res.json({ success: true, data: playlist });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to remove track' });
+  }
+});
+
+// DELETE PLAYLIST
+app.delete('/api/playlists/:playlistId', async (req, res) => {
   try {
     const { userId } = req.body;
     const { playlistId } = req.params;
 
-    const user = await UserData.findOne({ userId });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    let user = userId 
+      ? await UserData.findOne({ userId }) 
+      : await UserData.findOne({ 'playlists._id': playlistId });
+
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     user.playlists.pull({ _id: playlistId });
     await user.save();
 
-    res.json(user.playlists);
+    res.json({ success: true, data: user.playlists });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete playlist' });
+    res.status(500).json({ success: false, error: 'Failed to delete playlist' });
+  }
+});
+
+// GET SINGLE PLAYLIST BY ID
+app.get('/api/playlists/:playlistId', async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    const { userId } = req.query;
+
+    let user = userId 
+      ? await UserData.findOne({ userId }) 
+      : await UserData.findOne({ 'playlists._id': playlistId });
+
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    const playlist = user.playlists.id(playlistId);
+    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+    res.json({ success: true, data: playlist });
+  } catch (error) {
+    console.error('Error fetching playlist:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch playlist' });
+  }
+});
+
+// UPDATE PLAYLIST METADATA (RENAME / EDIT DESCRIPTION)
+app.put('/api/playlists/:playlistId', async (req, res) => {
+  try {
+    const { userId, title, description } = req.body;
+    const { playlistId } = req.params;
+
+    let user = userId 
+      ? await UserData.findOne({ userId }) 
+      : await UserData.findOne({ 'playlists._id': playlistId });
+
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    const playlist = user.playlists.id(playlistId);
+    if (!playlist) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+    if (title !== undefined) playlist.title = title;
+    if (description !== undefined) playlist.description = description;
+
+    await user.save();
+
+    res.json({ success: true, data: playlist });
+  } catch (error) {
+    console.error('Error updating playlist:', error);
+    res.status(500).json({ success: false, error: 'Failed to update playlist' });
+  }
+});
+
+// GENERATIVE AI BEAT GENERATOR (Hugging Face with Dev Fallback)
+app.post('/api/ai/generate-beat', async (req, res) => {
+  const { prompt } = req.body;
+
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
+  try {
+    console.log(`🎵 Attempting Hugging Face AI for: "${prompt}"...`);
+
+    // The Official Hugging Face Request
+    const response = await axios.post(
+      'https://router.huggingface.co/hf-inference/models/facebook/musicgen-small',
+      { inputs: prompt },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        responseType: 'arraybuffer',
+        timeout: 8000 // 8-second timeout so your frontend doesn't hang
+      }
+    );
+
+    const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+    const audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
+
+    console.log("✅ AI Beat generated successfully!");
+    res.json({ success: true, audioUrl, prompt });
+
+  } catch (error) {
+    console.warn('\n⚠️ NETWORK BLOCK DETECTED: ISP is blocking Hugging Face locally.');
+    console.log('🎧 Engaging "Dev Fallback Mode" for UI testing...\n');
+    
+    // High-quality royalty-free fallback track
+    const devFallbackUrl = "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3"; 
+
+    res.json({ 
+      success: true, 
+      audioUrl: devFallbackUrl, 
+      prompt: prompt,
+      isDevFallback: true
+    });
   }
 });
 

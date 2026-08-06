@@ -6,7 +6,7 @@ const TrackSchema = new mongoose.Schema({
   title: String,
   artist: String,
   thumbnail: String,
-});
+}, { _id: true, strict: false });
 
 const PlaylistSchema = new mongoose.Schema({
   title: { type: String, required: true },

@@ -12,11 +12,13 @@
   "license": "ISC",
   "dependencies": {
     "@google/genai": "^2.15.0",
+    "@gradio/client": "^2.4.0",
     "axios": "^1.19.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "mongoose": "^9.9.1"
+    "mongoose": "^9.9.1",
+    "youtube-sr": "^4.3.12"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

@@ -1,14 +1,42 @@
-// app/explore/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import AiVibeGenerator from "@/app/components/AiVibeGenerator";
 import { usePlayerStore } from "../store/usePlayerStore";
-import { Play, Music } from "lucide-react";
+import { Music } from "lucide-react";
+import TrackRow from "../components/TrackRow";
 
 export default function ExplorePage() {
   const queue = usePlayerStore((state) => state.queue);
   const playSong = usePlayerStore((state) => state.playSong);
+  const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const { data: session, status } = useSession();
+  const [playlists, setPlaylists] = useState<any[]>([]);
+
+  // Fetch the user's playlists so we can pass them down to TrackRow
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      if (status !== "authenticated") return;
+      
+      const userId = (session?.user as any)?.id || session?.user?.email || "default_user";
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      
+      try {
+        const res = await fetch(`${backendUrl}/api/playlists?userId=${encodeURIComponent(userId)}`, {
+          headers: { Authorization: `Bearer ${(session as any)?.accessToken || ""}` },
+        });
+        const data = await res.json();
+        if (data.success) {
+          setPlaylists(data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load playlists", err);
+      }
+    };
+    
+    fetchPlaylists();
+  }, [session, status]);
 
   return (
     <div className="flex flex-col gap-8 pb-24 animate-in fade-in duration-500">
@@ -26,38 +54,17 @@ export default function ExplorePage() {
 
           <div className="flex flex-col gap-2">
             {queue.map((track, idx) => {
-              const videoId = typeof track.id === "string" ? track.id : track.id?.videoId;
-
+              const trackId = track.id?.videoId || track.id || track._id;
+              
               return (
-                <div
-                  key={videoId || idx}
-                  onClick={() => playSong(track, queue)}
-                  className="group flex items-center justify-between p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-800/60 border border-zinc-800/60 cursor-pointer transition-all"
-                >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <span className="w-6 text-center text-zinc-500 text-sm font-semibold group-hover:text-purple-400">
-                      {idx + 1}
-                    </span>
-                    <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
-                      <img
-                        src={track.snippet?.thumbnails?.default?.url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <Play size={16} className="text-white fill-white" />
-                      </div>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-sm line-clamp-1 text-white group-hover:text-purple-400 transition-colors">
-                        {track.snippet?.title}
-                      </h3>
-                      <p className="text-zinc-500 text-xs truncate mt-0.5">
-                        {track.snippet?.channelTitle}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <TrackRow
+                  key={trackId || idx}
+                  track={track}
+                  index={idx}
+                  isPlaying={currentTrack?.id?.videoId === trackId || currentTrack?.id === trackId}
+                  userPlaylists={playlists}
+                  onPlay={() => playSong(track, queue)}
+                />
               );
             })}
           </div>
