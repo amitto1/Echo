@@ -9,6 +9,7 @@ interface PlayerStore {
   
   // Actions
   playSong: (video: any, newQueue?: any[]) => void;
+  setQueue: (tracks: any[]) => void;
   playNext: () => void;
   playPrevious: () => void;
   clearQueue: () => void;
@@ -31,6 +32,11 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
       return { queue: newQueue, currentIndex: index !== -1 ? index : 0 };
     }
     return { queue: [video], currentIndex: 0 };
+  }),
+
+  setQueue: (tracks) => set({ 
+    queue: tracks, 
+    currentIndex: tracks.length > 0 ? 0 : -1 
   }),
 
   playNext: () => set((state) => {
