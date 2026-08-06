@@ -77,7 +77,6 @@ export default function AiVibeGenerator() {
         }
 
         if (data.success && data.audioUrl) {
-          // Format generated audio into a track object compatible with usePlayerStore & TrackRow
           const generatedTrack = {
             id: `ai-beat-${Date.now()}`,
             title: searchQuery.charAt(0).toUpperCase() + searchQuery.slice(1),
@@ -87,7 +86,6 @@ export default function AiVibeGenerator() {
             isAiGenerated: true,
           };
 
-          // Play the song immediately and add it to top of queue
           playSong(generatedTrack, [generatedTrack]);
         } else {
           alert("Failed to synthesize beat. Please try another prompt!");
