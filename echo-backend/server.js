@@ -470,7 +470,6 @@ app.put('/api/playlists/:playlistId', async (req, res) => {
   }
 });
 
-// SMART DYNAMIC AI BEAT STUDIO (Instant & Vibe-Matched)
 app.post('/api/ai/generate-beat', async (req, res) => {
   const { prompt } = req.body;
 
@@ -478,48 +477,41 @@ app.post('/api/ai/generate-beat', async (req, res) => {
     return res.status(400).json({ error: 'Prompt is required' });
   }
 
-  try {
-    console.log(`🎵 Synthesizing AI beat for prompt: "${prompt}"...`);
+  console.log(`🎵 Incoming prompt for beat generation: "${prompt}"`);
 
-    const lowerPrompt = prompt.toLowerCase();
-    let selectedAudioUrl = "";
-    let matchedGenre = "Custom AI Synth";
+  const lowerPrompt = prompt.toLowerCase();
+  let selectedAudioUrl = "";
+  let matchedGenre = "";
 
-    // Dynamic keyword matching to deliver unique audio per vibe
-    if (lowerPrompt.includes('lofi') || lowerPrompt.includes('chill') || lowerPrompt.includes('piano') || lowerPrompt.includes('coffee')) {
-      selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3"; // Chill Lofi
-      matchedGenre = "AI Lofi Focus Beat";
-    } else if (lowerPrompt.includes('phonk') || lowerPrompt.includes('workout') || lowerPrompt.includes('gym') || lowerPrompt.includes('fast')) {
-      selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/03/15/audio_c8c36b886d.mp3"; // High energy Phonk/Synth
-      matchedGenre = "AI Aggressive Phonk";
-    } else if (lowerPrompt.includes('trap') || lowerPrompt.includes('808') || lowerPrompt.includes('rap') || lowerPrompt.includes('hip hop')) {
-      selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3"; // Trap beat style
-      matchedGenre = "AI Trap 808 Beat";
-    } else if (lowerPrompt.includes('synthwave') || lowerPrompt.includes('cyberpunk') || lowerPrompt.includes('80s') || lowerPrompt.includes('retro')) {
-      selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/10/14/audio_993dafd1d2.mp3"; // Synthwave drive
-      matchedGenre = "AI Cyberpunk Synthwave";
-    } else {
-      // Default ambient fallback for custom prompts
-      selectedAudioUrl = "https://cdn.pixabay.com/audio/2021/09/06/audio_75c9772d1a.mp3"; 
-      matchedGenre = "AI Ambient Soundscape";
-    }
-
-    // Simulate a brief AI "generation" computation delay (1.5 seconds) for realism
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    console.log(`✅ Success! Generated genre: ${matchedGenre}`);
-    
-    res.json({ 
-      success: true, 
-      audioUrl: selectedAudioUrl, 
-      prompt: prompt,
-      genre: matchedGenre
-    });
-
-  } catch (error) {
-    console.error('❌ Beat Generation Error:', error);
-    res.status(500).json({ success: false, error: 'Failed to synthesize beat.' });
+  // Highly distinct genre matching
+  if (lowerPrompt.includes('phonk') || lowerPrompt.includes('workout') || lowerPrompt.includes('gym')) {
+    // Phonk/Electronic track
+    selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/03/15/audio_c8c36b886d.mp3";
+    matchedGenre = "🔥 Aggressive Phonk Beat";
+  } else if (lowerPrompt.includes('trap') || lowerPrompt.includes('808') || lowerPrompt.includes('rap')) {
+    // Trap track
+    selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3";
+    matchedGenre = "🥁 Heavy 808 Trap Beat";
+  } else if (lowerPrompt.includes('synthwave') || lowerPrompt.includes('cyberpunk') || lowerPrompt.includes('retro')) {
+    // Synthwave track
+    selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/10/14/audio_993dafd1d2.mp3";
+    matchedGenre = "🌆 80s Cyberpunk Synthwave";
+  } else {
+    // Default Lofi/Chill track
+    selectedAudioUrl = "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3";
+    matchedGenre = "☕ Chill Lofi Piano Focus";
   }
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  console.log(`✅ Matched Genre: ${matchedGenre}`);
+
+  res.json({ 
+    success: true, 
+    audioUrl: selectedAudioUrl, 
+    prompt: prompt,
+    genre: matchedGenre
+  });
 });
 
 app.listen(PORT, () => {

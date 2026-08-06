@@ -10,7 +10,6 @@ export default function AiVibeGenerator() {
   const [mode, setMode] = useState<"vibe" | "beat">("vibe");
   const [statusText, setStatusText] = useState("");
   
-  // NOTICE: setQueue is completely GONE from here. We only use playSong!
   const playSong = usePlayerStore((state) => state.playSong);
 
   const vibeSuggestions = [
@@ -58,7 +57,7 @@ export default function AiVibeGenerator() {
         }
 
       } else {
-        setStatusText("Synthesizing AI Beat... (Takes ~15s)");
+        setStatusText("Synthesizing AI Beat...");
 
         const res = await fetch(`${backendUrl}/api/ai/generate-beat`, {
           method: "POST",
@@ -68,15 +67,10 @@ export default function AiVibeGenerator() {
 
         const data = await res.json();
 
-        if (res.status === 503) {
-          alert("The AI model is waking up from a cold start! Please wait 20 seconds and try again.");
-          return;
-        }
-
         if (data.success && data.audioUrl) {
           const generatedTrack = {
             id: `ai-beat-${Date.now()}`,
-            title: searchQuery.charAt(0).toUpperCase() + searchQuery.slice(1),
+            title: data.genre || searchQuery.charAt(0).toUpperCase() + searchQuery.slice(1),
             artist: "Echo.AI Studio",
             thumbnail: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80",
             audioUrl: data.audioUrl,
