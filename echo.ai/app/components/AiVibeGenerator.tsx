@@ -7,12 +7,12 @@ import { usePlayerStore } from "../store/usePlayerStore";
 export default function AiVibeGenerator() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"vibe" | "beat">("vibe"); // Toggle state
+  const [mode, setMode] = useState<"vibe" | "beat">("vibe");
   const [statusText, setStatusText] = useState("");
   
+  // NOTICE: setQueue is completely GONE from here. We only use playSong!
   const playSong = usePlayerStore((state) => state.playSong);
 
-  // Suggestions for Vibe Search
   const vibeSuggestions = [
     "Lofi beats to focus to",
     "Late night drive vibes",
@@ -21,7 +21,6 @@ export default function AiVibeGenerator() {
     "Retro synthwave journey",
   ];
 
-  // Suggestions for AI Beat Generation
   const beatSuggestions = [
     "Chill lofi piano beat",
     "80s synthwave cyberpunk driving",
@@ -38,7 +37,6 @@ export default function AiVibeGenerator() {
 
     try {
       if (mode === "vibe") {
-        // --- MODE 1: CURATE VIBE (Gemini + YouTube) ---
         setStatusText("Curating playlist...");
         
         const aiRes = await fetch(`${backendUrl}/api/ai/recommend`, {
@@ -60,7 +58,6 @@ export default function AiVibeGenerator() {
         }
 
       } else {
-        // --- MODE 2: GENERATE AI BEAT (Hugging Face MusicGen) ---
         setStatusText("Synthesizing AI Beat... (Takes ~15s)");
 
         const res = await fetch(`${backendUrl}/api/ai/generate-beat`, {
@@ -112,8 +109,6 @@ export default function AiVibeGenerator() {
 
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col items-center gap-6 mb-8">
-      
-      {/* Title Header */}
       <div className="text-center space-y-2">
         <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight flex items-center justify-center gap-3">
           {mode === "vibe" ? "What do you want to hear?" : "Synthesize Custom Beat"}
@@ -125,14 +120,11 @@ export default function AiVibeGenerator() {
         </p>
       </div>
 
-      {/* Mode Switcher Tabs */}
       <div className="flex items-center bg-zinc-900/90 border border-zinc-800 p-1 rounded-full shadow-inner">
         <button
           onClick={() => setMode("vibe")}
           className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs md:text-sm font-semibold transition-all ${
-            mode === "vibe" 
-              ? "bg-purple-600 text-white shadow-md" 
-              : "text-zinc-400 hover:text-white"
+            mode === "vibe" ? "bg-purple-600 text-white shadow-md" : "text-zinc-400 hover:text-white"
           }`}
         >
           <Search size={15} />
@@ -142,9 +134,7 @@ export default function AiVibeGenerator() {
         <button
           onClick={() => setMode("beat")}
           className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs md:text-sm font-semibold transition-all ${
-            mode === "beat" 
-              ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md" 
-              : "text-zinc-400 hover:text-white"
+            mode === "beat" ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md" : "text-zinc-400 hover:text-white"
           }`}
         >
           <Wand2 size={15} />
@@ -152,7 +142,6 @@ export default function AiVibeGenerator() {
         </button>
       </div>
 
-      {/* Main Search/Generate Bar with Purple Glow */}
       <div className="relative w-full group">
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-800 rounded-full blur-md opacity-35 group-hover:opacity-75 transition-all duration-500"></div>
 
@@ -169,9 +158,7 @@ export default function AiVibeGenerator() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={
-              mode === "vibe" 
-                ? "Ask Echo.AI for a vibe or artist..." 
-                : "e.g., Fast rap beat with smooth piano and heavy 808s..."
+              mode === "vibe" ? "Ask Echo.AI for a vibe or artist..." : "e.g., Fast rap beat with smooth piano and heavy 808s..."
             }
             className="w-full bg-transparent text-white placeholder-zinc-500 text-sm md:text-base focus:outline-none pr-4"
           />
@@ -205,7 +192,6 @@ export default function AiVibeGenerator() {
         </form>
       </div>
 
-      {/* Dynamic Floating Suggestion Pills */}
       <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-3xl">
         <span className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mr-1">
           Suggestions:
@@ -220,7 +206,6 @@ export default function AiVibeGenerator() {
           </button>
         ))}
       </div>
-
     </div>
   );
 }
